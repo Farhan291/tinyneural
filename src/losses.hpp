@@ -8,4 +8,8 @@ public:
     Tensor<T> squared = diff * diff;
     return squared.mean();
   }
+
+  Tensor<T> mseBackward(const Tensor<T> &prediction, const Tensor<T> &target) {
+    return 2 * (prediction - target) / target.size();
+  }
 };

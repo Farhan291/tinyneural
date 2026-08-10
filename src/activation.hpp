@@ -19,4 +19,24 @@ public:
     Tensor<T> eNeg = (-x).exp();
     return (ePos - eNeg) / (ePos + eNeg);
   }
+
+  Tensor<T> sigmoidBackward(const Tensor<T> &x, const Tensor<T> &dY) {
+    Tensor<T> s = sigmoid(x);
+    return dY * s * (1 - s);
+  }
+
+  Tensor<T> reluBackward(const Tensor<T> &x, const Tensor<T> &dY) {
+    Tensor<T> res(x.shape());
+    for (int i = 0; i < x.size(); i++) {
+      if (x[i] > 0)
+        res[i] = 1;
+      else
+        res[i] = 0;
+    }
+    return dY * res;
+  }
+
+  Tensor<T> tanhBackward(const Tensor<T> &x, const Tensor<T> &dY) {
+    return dY * (1 - tanh(x) * tanh(x));
+  }
 };

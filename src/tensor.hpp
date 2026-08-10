@@ -512,10 +512,31 @@ public:
 
 template <typename T> Tensor<T> operator/(T scalar, const Tensor<T> &tensor) {
   Tensor<T> res(tensor.shape());
-
   for (int i = 0; i < tensor.size(); i++) {
     res[i] = scalar / tensor[i];
   }
+  return res;
+}
 
+template <typename T> Tensor<T> operator*(T scalar, const Tensor<T> &tensor) {
+  Tensor<T> res(tensor.shape());
+  for (int i = 0; i < tensor.size(); i++) {
+    res[i] = scalar * tensor[i];
+  }
+  return res;
+}
+
+template <typename T> Tensor<T> operator+(T scalar, const Tensor<T> &tensor) {
+  Tensor<T> res(tensor.shape());
+  for (int i = 0; i < tensor.size(); i++) {
+    res[i] = scalar + tensor[i];
+  }
+  return res;
+}
+template <typename T> Tensor<T> operator-(T scalar, const Tensor<T> &tensor) {
+  Tensor<T> res(tensor.shape());
+  for (int i = 0; i < tensor.size(); i++) {
+    res[i] = scalar - tensor[i];
+  }
   return res;
 }
