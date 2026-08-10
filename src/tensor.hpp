@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <limits>
 #include <stdexcept>
 #include <vector>
 template <typename T> class Tensor {
@@ -25,7 +26,7 @@ public:
   }
   int offset(const std::vector<int> &indices) const {
     int n = indices.size();
-    if (n != _shape.size()) {
+    if (n != (int)_shape.size()) {
       throw std::runtime_error("wrong no. of indices");
     }
     int off = 0;
@@ -56,7 +57,7 @@ public:
       }
       dimensions *= x;
     }
-    if (dimensions != data.size()) {
+    if (dimensions != (int)data.size()) {
       throw std::runtime_error("reshape changes tensor size");
     }
     _shape = newshape;
@@ -196,9 +197,9 @@ public:
   }
   std::vector<int> broadcastIndex(const std::vector<int> &resultIndex,
                                   const std::vector<int> &originalShape) const {
-    int offset = resultIndex.size() - originalShape.size();
+    int offset = (int)resultIndex.size() - (int)originalShape.size();
     std::vector<int> index(originalShape.size());
-    for (int i = 0; i < originalShape.size(); i++) {
+    for (int i = 0; i < (int)originalShape.size(); i++) {
       int resultDim = i + offset;
       if (originalShape[i] == 1) {
         index[i] = 0;
@@ -271,28 +272,186 @@ public:
   Tensor<T> operator+(T scalar) const {
     Tensor<T> res(_shape);
     for (int i = 0; i < size(); i++) {
-      res[i] = data[i] + scalar;
+      res.data[i] = data[i] + scalar;
     }
     return res;
   }
   Tensor<T> operator-(T scalar) const {
     Tensor<T> res(_shape);
     for (int i = 0; i < size(); i++) {
-      res[i] = data[i] - scalar;
+      res.data[i] = data[i] - scalar;
     }
     return res;
   }
   Tensor<T> operator*(T scalar) const {
     Tensor<T> res(_shape);
     for (int i = 0; i < size(); i++) {
-      res[i] = data[i] * scalar;
+      res.data[i] = data[i] * scalar;
     }
     return res;
   }
   Tensor<T> operator/(T scalar) const {
     Tensor<T> res(_shape);
     for (int i = 0; i < size(); i++) {
-      res[i] = data[i] / scalar;
+      res.data[i] = data[i] / scalar;
+    }
+    return res;
+  }
+
+  // reductions {sum,mean,max,min,argmax,argmin}
+  Tensor<T> sum(int axis) const {
+    if (axis < 0 || axis >= rank()) {
+      throw std::runtime_error("invalid axis");
+    }
+    std::vector<int> newShape;
+    for (int i = 0; i < rank(); i++) {
+      if (i != axis) {
+        newShape.push_back(_shape[i]);
+      }
+    }
+    Tensor<T> res(newShape);
+    res.fill(0);
+    for (int off = 0; off < res.size(); off++) {
+      std::vector<int> resIndex = res.indicesFromOffset(off);
+      T sum = 0;
+      for (int x = 0; x < _shape[axis]; x++) {
+        std::vector<int> inputIndex;
+        int j = 0;
+        for (int i = 0; i < rank(); i++) {
+          if (i == axis) {
+            inputIndex.push_back(x);
+          } else {
+            inputIndex.push_back(resIndex[j++]);
+          }
+        }
+        sum += at(inputIndex);
+      }
+      res.at(resIndex) = sum;
+    }
+    return res;
+  }
+  Tensor<T> mean(int axis) const {
+    Tensor<T> res = sum(axis);
+    T count = _shape[axis];
+    return res / count;
+  }
+  Tensor<T> max(int axis) const {
+    if (axis < 0 || axis >= rank()) {
+      throw std::runtime_error("invalid axis");
+    }
+    std::vector<int> newShape;
+    for (int i = 0; i < rank(); i++) {
+      if (i != axis)
+        newShape.push_back(_shape[i]);
+    }
+    Tensor<T> res(newShape);
+    for (int off = 0; off < res.size(); off++) {
+      T maxi = std::numeric_limits<T>::lowest();
+      std::vector<int> resIndex = res.indicesFromOffset(off);
+      for (int x = 0; x < _shape[axis]; x++) {
+        std::vector<int> inputIndex;
+        int j = 0;
+        for (int i = 0; i < rank(); i++) {
+          if (i == axis) {
+            inputIndex.push_back(x);
+          } else
+            inputIndex.push_back(resIndex[j++]);
+        }
+        maxi = std::max(maxi, at(inputIndex));
+      }
+      res.at(resIndex) = maxi;
+    }
+    return res;
+  }
+  Tensor<T> min(int axis) const {
+    if (axis < 0 || axis >= rank()) {
+      throw std::runtime_error("invalid axis");
+    }
+    std::vector<int> newShape;
+    for (int i = 0; i < rank(); i++) {
+      if (i != axis)
+        newShape.push_back(_shape[i]);
+    }
+    Tensor<T> res(newShape);
+    for (int off = 0; off < res.size(); off++) {
+      T mini = std::numeric_limits<T>::max();
+      std::vector<int> resIndex = res.indicesFromOffset(off);
+      for (int x = 0; x < _shape[axis]; x++) {
+        std::vector<int> inputIndex;
+        int j = 0;
+        for (int i = 0; i < rank(); i++) {
+          if (i == axis) {
+            inputIndex.push_back(x);
+          } else
+            inputIndex.push_back(resIndex[j++]);
+        }
+        mini = std::min(mini, at(inputIndex));
+      }
+      res.at(resIndex) = mini;
+    }
+    return res;
+  }
+  Tensor<T> maxIndex(int axis) const {
+    if (axis < 0 || axis >= rank()) {
+      throw std::runtime_error("invalid axis");
+    }
+    std::vector<int> newShape;
+    for (int i = 0; i < rank(); i++) {
+      if (i != axis)
+        newShape.push_back(_shape[i]);
+    }
+    Tensor<T> res(newShape);
+    for (int off = 0; off < res.size(); off++) {
+      T maxi = std::numeric_limits<T>::lowest();
+      std::vector<int> resIndex = res.indicesFromOffset(off);
+      int maxIndex = 0;
+      for (int x = 0; x < _shape[axis]; x++) {
+        std::vector<int> inputIndex;
+        int j = 0;
+        for (int i = 0; i < rank(); i++) {
+          if (i == axis) {
+            inputIndex.push_back(x);
+          } else
+            inputIndex.push_back(resIndex[j++]);
+        }
+        if (maxi < at(inputIndex)) {
+          maxi = at(inputIndex);
+          maxIndex = x;
+        }
+      }
+      res.at(resIndex) = maxIndex;
+    }
+    return res;
+  }
+  Tensor<T> minIndex(int axis) const {
+    if (axis < 0 || axis >= rank()) {
+      throw std::runtime_error("invalid axis");
+    }
+    std::vector<int> newShape;
+    for (int i = 0; i < rank(); i++) {
+      if (i != axis)
+        newShape.push_back(_shape[i]);
+    }
+    Tensor<T> res(newShape);
+    for (int off = 0; off < res.size(); off++) {
+      T mini = std::numeric_limits<T>::max();
+      std::vector<int> resIndex = res.indicesFromOffset(off);
+      int minIndex = 0;
+      for (int x = 0; x < _shape[axis]; x++) {
+        std::vector<int> inputIndex;
+        int j = 0;
+        for (int i = 0; i < rank(); i++) {
+          if (i == axis) {
+            inputIndex.push_back(x);
+          } else
+            inputIndex.push_back(resIndex[j++]);
+        }
+        if (mini > at(inputIndex)) {
+          mini = at(inputIndex);
+          minIndex = x;
+        }
+      }
+      res.at(resIndex) = minIndex;
     }
     return res;
   }
