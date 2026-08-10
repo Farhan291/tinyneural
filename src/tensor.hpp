@@ -46,6 +46,10 @@ public:
     return data[offset(indices)];
   }
 
+  T &operator[](int i) { return data[i]; }
+
+  const T &operator[](int i) const { return data[i]; }
+
   int size() const { return data.size(); }
   int rank() const { return _shape.size(); }
   const std::vector<int> &shape() const { return _shape; }
@@ -217,7 +221,7 @@ public:
     Tensor<T> res(_shape);
 
     for (int i = 0; i < size(); i++) {
-      res.data[i] = std::exp(data[i]);
+      res[i] = std::exp(data[i]);
     }
 
     return res;
@@ -284,32 +288,31 @@ public:
   Tensor<T> operator+(T scalar) const {
     Tensor<T> res(_shape);
     for (int i = 0; i < size(); i++) {
-      res.data[i] = data[i] + scalar;
+      res[i] = data[i] + scalar;
     }
     return res;
   }
   Tensor<T> operator-(T scalar) const {
     Tensor<T> res(_shape);
     for (int i = 0; i < size(); i++) {
-      res.data[i] = data[i] - scalar;
+      res[i] = data[i] - scalar;
     }
     return res;
   }
   Tensor<T> operator*(T scalar) const {
     Tensor<T> res(_shape);
     for (int i = 0; i < size(); i++) {
-      res.data[i] = data[i] * scalar;
+      res[i] = data[i] * scalar;
     }
     return res;
   }
   Tensor<T> operator/(T scalar) const {
     Tensor<T> res(_shape);
     for (int i = 0; i < size(); i++) {
-      res.data[i] = data[i] / scalar;
+      res[i] = data[i] / scalar;
     }
     return res;
   }
-
   // reductions {sum,mean,max,min,argmax,argmin}
   Tensor<T> sum(int axis, bool keepdim = false) const {
     if (axis < 0 || axis >= rank()) {
@@ -496,3 +499,13 @@ public:
     return expVal / sumExp;
   }
 };
+
+template <typename T> Tensor<T> operator/(T scalar, const Tensor<T> &tensor) {
+  Tensor<T> res(tensor.shape());
+
+  for (int i = 0; i < tensor.size(); i++) {
+    res[i] = scalar / tensor[i];
+  }
+
+  return res;
+}
