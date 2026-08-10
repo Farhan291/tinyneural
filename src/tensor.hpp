@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cmath>
 #include <limits>
 #include <stdexcept>
 #include <vector>
@@ -211,6 +212,17 @@ public:
   }
 
   // element wise operation
+  // unary
+  Tensor<T> exp() const {
+    Tensor<T> res(_shape);
+
+    for (int i = 0; i < size(); i++) {
+      res.data[i] = std::exp(data[i]);
+    }
+
+    return res;
+  }
+  // binary
   Tensor<T> operator+(const Tensor<T> &other) const {
     /*if (_shape != other._shape) {
       throw std::runtime_error("incompartible dimensions");
@@ -299,7 +311,7 @@ public:
   }
 
   // reductions {sum,mean,max,min,argmax,argmin}
-  Tensor<T> sum(int axis) const {
+  Tensor<T> sum(int axis, bool keepdim = false) const {
     if (axis < 0 || axis >= rank()) {
       throw std::runtime_error("invalid axis");
     }
@@ -307,6 +319,9 @@ public:
     for (int i = 0; i < rank(); i++) {
       if (i != axis) {
         newShape.push_back(_shape[i]);
+      } else {
+        if (keepdim)
+          newShape.push_back(1);
       }
     }
     Tensor<T> res(newShape);
@@ -321,7 +336,7 @@ public:
           if (i == axis) {
             inputIndex.push_back(x);
           } else {
-            inputIndex.push_back(resIndex[j++]);
+            inputIndex.push_back(keepdim ? resIndex[i] : resIndex[j++]);
           }
         }
         sum += at(inputIndex);
@@ -330,12 +345,12 @@ public:
     }
     return res;
   }
-  Tensor<T> mean(int axis) const {
-    Tensor<T> res = sum(axis);
+  Tensor<T> mean(int axis, bool keepdim = false) const {
+    Tensor<T> res = sum(axis, keepdim);
     T count = _shape[axis];
     return res / count;
   }
-  Tensor<T> max(int axis) const {
+  Tensor<T> max(int axis, bool keepdim = false) const {
     if (axis < 0 || axis >= rank()) {
       throw std::runtime_error("invalid axis");
     }
@@ -343,6 +358,10 @@ public:
     for (int i = 0; i < rank(); i++) {
       if (i != axis)
         newShape.push_back(_shape[i]);
+      else {
+        if (keepdim)
+          newShape.push_back(1);
+      }
     }
     Tensor<T> res(newShape);
     for (int off = 0; off < res.size(); off++) {
@@ -355,7 +374,7 @@ public:
           if (i == axis) {
             inputIndex.push_back(x);
           } else
-            inputIndex.push_back(resIndex[j++]);
+            inputIndex.push_back(keepdim ? resIndex[i] : resIndex[j++]);
         }
         maxi = std::max(maxi, at(inputIndex));
       }
@@ -363,7 +382,7 @@ public:
     }
     return res;
   }
-  Tensor<T> min(int axis) const {
+  Tensor<T> min(int axis, bool keepdim = false) const {
     if (axis < 0 || axis >= rank()) {
       throw std::runtime_error("invalid axis");
     }
@@ -371,6 +390,10 @@ public:
     for (int i = 0; i < rank(); i++) {
       if (i != axis)
         newShape.push_back(_shape[i]);
+      else {
+        if (keepdim)
+          newShape.push_back(1);
+      }
     }
     Tensor<T> res(newShape);
     for (int off = 0; off < res.size(); off++) {
@@ -383,7 +406,7 @@ public:
           if (i == axis) {
             inputIndex.push_back(x);
           } else
-            inputIndex.push_back(resIndex[j++]);
+            inputIndex.push_back(keepdim ? resIndex[i] : resIndex[j++]);
         }
         mini = std::min(mini, at(inputIndex));
       }
@@ -391,7 +414,7 @@ public:
     }
     return res;
   }
-  Tensor<T> maxIndex(int axis) const {
+  Tensor<T> maxIndex(int axis, bool keepdim = false) const {
     if (axis < 0 || axis >= rank()) {
       throw std::runtime_error("invalid axis");
     }
@@ -399,6 +422,10 @@ public:
     for (int i = 0; i < rank(); i++) {
       if (i != axis)
         newShape.push_back(_shape[i]);
+      else {
+        if (keepdim)
+          newShape.push_back(1);
+      }
     }
     Tensor<T> res(newShape);
     for (int off = 0; off < res.size(); off++) {
@@ -412,7 +439,7 @@ public:
           if (i == axis) {
             inputIndex.push_back(x);
           } else
-            inputIndex.push_back(resIndex[j++]);
+            inputIndex.push_back(keepdim ? resIndex[i] : resIndex[j++]);
         }
         if (maxi < at(inputIndex)) {
           maxi = at(inputIndex);
@@ -423,7 +450,7 @@ public:
     }
     return res;
   }
-  Tensor<T> minIndex(int axis) const {
+  Tensor<T> minIndex(int axis, bool keepdim = false) const {
     if (axis < 0 || axis >= rank()) {
       throw std::runtime_error("invalid axis");
     }
@@ -431,6 +458,10 @@ public:
     for (int i = 0; i < rank(); i++) {
       if (i != axis)
         newShape.push_back(_shape[i]);
+      else {
+        if (keepdim)
+          newShape.push_back(1);
+      }
     }
     Tensor<T> res(newShape);
     for (int off = 0; off < res.size(); off++) {
@@ -444,7 +475,7 @@ public:
           if (i == axis) {
             inputIndex.push_back(x);
           } else
-            inputIndex.push_back(resIndex[j++]);
+            inputIndex.push_back(keepdim ? resIndex[i] : resIndex[j++]);
         }
         if (mini > at(inputIndex)) {
           mini = at(inputIndex);
@@ -454,5 +485,14 @@ public:
       res.at(resIndex) = minIndex;
     }
     return res;
+  }
+
+  // softmax
+  Tensor<T> softmax(int axis) const {
+    Tensor<T> maxVal = max(axis, true);
+    Tensor shifted = *this - maxVal;
+    Tensor<T> expVal = shifted.exp();
+    Tensor<T> sumExp = expVal.sum(axis, true);
+    return expVal / sumExp;
   }
 };
