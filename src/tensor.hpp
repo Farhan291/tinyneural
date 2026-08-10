@@ -176,48 +176,97 @@ public:
     }
     return res;
   }
+  // broadcast
+  std::vector<int> broadcastShape(const std::vector<int> &ashape,
+                                  const std::vector<int> &bshape) const {
+    int n = std::max(ashape.size(), bshape.size());
+    std::vector<int> res(n);
+    for (int k = 0; k < n; k++) {
+      int i = ashape.size() - k - 1;
+      int j = bshape.size() - k - 1;
+
+      int adim = (i >= 0) ? ashape[i] : 1;
+      int bdim = (j >= 0) ? bshape[j] : 1;
+      if (adim != bdim && adim != 1 && bdim != 1) {
+        throw std::runtime_error("incompatible broadcast shapes");
+      }
+      res[n - k - 1] = std::max(adim, bdim);
+    }
+    return res;
+  }
+  std::vector<int> broadcastIndex(const std::vector<int> &resultIndex,
+                                  const std::vector<int> &originalShape) const {
+    int offset = resultIndex.size() - originalShape.size();
+    std::vector<int> index(originalShape.size());
+    for (int i = 0; i < originalShape.size(); i++) {
+      int resultDim = i + offset;
+      if (originalShape[i] == 1) {
+        index[i] = 0;
+      } else {
+        index[i] = resultIndex[resultDim];
+      }
+    }
+    return index;
+  }
 
   // element wise operation
   Tensor<T> operator+(const Tensor<T> &other) const {
-    if (_shape != other._shape) {
+    /*if (_shape != other._shape) {
       throw std::runtime_error("incompartible dimensions");
-    }
-    Tensor<T> res(this->_shape);
-    for (int i = 0; i < shape(); i++) {
-      res[i] = data[i] + other.data[i];
+    }*/
+    std::vector<int> newShape = broadcastShape(_shape, other._shape);
+    Tensor<T> res(newShape);
+    for (int off = 0; off < res.size(); off++) {
+      std::vector<int> resultIndex = res.indicesFromOffset(off);
+      std::vector<int> aIndex = broadcastIndex(resultIndex, _shape);
+      std::vector<int> bIndex = broadcastIndex(resultIndex, other._shape);
+      res.at(resultIndex) = this->at(aIndex) + other.at(bIndex);
     }
     return res;
   }
   Tensor<T> operator-(const Tensor<T> &other) const {
-    if (_shape != other._shape) {
+    /*if (_shape != other._shape) {
       throw std::runtime_error("incompartible dimensions");
-    }
-    Tensor<T> res(this->_shape);
-    for (int i = 0; i < shape(); i++) {
-      res[i] = data[i] - other.data[i];
+    }*/
+    std::vector<int> newShape = broadcastShape(_shape, other._shape);
+    Tensor<T> res(newShape);
+    for (int off = 0; off < res.size(); off++) {
+      std::vector<int> resultIndex = res.indicesFromOffset(off);
+      std::vector<int> aIndex = broadcastIndex(resultIndex, _shape);
+      std::vector<int> bIndex = broadcastIndex(resultIndex, other._shape);
+      res.at(resultIndex) = this->at(aIndex) - other.at(bIndex);
     }
     return res;
   }
   Tensor<T> operator*(const Tensor<T> &other) const {
-    if (_shape != other._shape) {
+    /*if (_shape != other._shape) {
       throw std::runtime_error("incompartible dimensions");
-    }
-    Tensor<T> res(this->_shape);
-    for (int i = 0; i < shape(); i++) {
-      res[i] = data[i] * other.data[i];
+    }*/
+    std::vector<int> newShape = broadcastShape(_shape, other._shape);
+    Tensor<T> res(newShape);
+    for (int off = 0; off < res.size(); off++) {
+      std::vector<int> resultIndex = res.indicesFromOffset(off);
+      std::vector<int> aIndex = broadcastIndex(resultIndex, _shape);
+      std::vector<int> bIndex = broadcastIndex(resultIndex, other._shape);
+      res.at(resultIndex) = this->at(aIndex) * other.at(bIndex);
     }
     return res;
   }
   Tensor<T> operator/(const Tensor<T> &other) const {
-    if (_shape != other._shape) {
+    /*if (_shape != other._shape) {
       throw std::runtime_error("incompartible dimensions");
-    }
-    Tensor<T> res(this->_shape);
-    for (int i = 0; i < shape(); i++) {
-      res[i] = data[i] / other.data[i];
+    }*/
+    std::vector<int> newShape = broadcastShape(_shape, other._shape);
+    Tensor<T> res(newShape);
+    for (int off = 0; off < res.size(); off++) {
+      std::vector<int> resultIndex = res.indicesFromOffset(off);
+      std::vector<int> aIndex = broadcastIndex(resultIndex, _shape);
+      std::vector<int> bIndex = broadcastIndex(resultIndex, other._shape);
+      res.at(resultIndex) = this->at(aIndex) / other.at(bIndex);
     }
     return res;
   }
+
   // scalar operation
   Tensor<T> operator+(T scalar) const {
     Tensor<T> res(_shape);
