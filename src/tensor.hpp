@@ -353,6 +353,16 @@ public:
     T count = _shape[axis];
     return res / count;
   }
+  T mean() const {
+    if (size() == 0) {
+      throw std::runtime_error("mean of empty tensor");
+    }
+    T sum = 0;
+    for (int i = 0; i < size(); i++) {
+      sum += data[i];
+    }
+    return sum / static_cast<T>(size());
+  }
   Tensor<T> max(int axis, bool keepdim = false) const {
     if (axis < 0 || axis >= rank()) {
       throw std::runtime_error("invalid axis");
