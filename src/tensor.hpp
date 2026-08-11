@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <random>
 #include <stdexcept>
 #include <vector>
 template <typename T> class Tensor {
@@ -12,6 +13,8 @@ private:
   std::vector<int> stride;
 
 public:
+  Tensor() = default;
+
   Tensor(const std::vector<int> &shape) : _shape(shape) {
     int dimensions = 1;
     int sz = shape.size();
@@ -77,16 +80,17 @@ public:
   void fill(const T &value) { std::fill(data.begin(), data.end(), value); }
 
   Tensor<T> transpose() const {
-    std::vector<int> newshape = _shape;
-    std::reverse(newshape.begin(), newshape.end());
+    if (rank() < 2) {
+      throw std::runtime_error("transpose requires rank >= 2");
+    }
+    std::vector<int> newShape = _shape;
+    std::swap(newShape[rank() - 2], newShape[rank() - 1]);
 
-    Tensor<T> result(newshape);
+    Tensor<T> result(newShape);
 
     for (int off = 0; off < size(); off++) {
       std::vector<int> indices = indicesFromOffset(off);
-
-      std::reverse(indices.begin(), indices.end());
-
+      std::swap(indices[rank() - 2], indices[rank() - 1]);
       result.at(indices) = data[off];
     }
 
@@ -112,61 +116,53 @@ public:
     return indices;
   }
 
-  Tensor<T> matmul(const Tensor<T> &other) {
-    if (this->rank() < 2 || other.rank() < 2) {
-      throw std::runtime_error("matmul requires tensor rank >=2 ");
-    }
-    // shape = [Batch1, batch2 ....., m,n]
+  Tensor<T> matmul(const Tensor<T> &other) const {
     int r1 = this->rank();
     int r2 = other.rank();
+    if (r1 < 2 || r2 < 2) {
+      throw std::runtime_error("matmul requires tensor rank >= 2");
+    }
+    // shape = [Batch1, batch2 ....., m,n]
     int m = this->_shape[r1 - 2];
     int k = this->_shape[r1 - 1];
-    int k2 = other._shape[r1 - 2];
-    int n = other._shape[r1 - 1];
+    int k2 = other._shape[r2 - 2];
+    int n = other._shape[r2 - 1];
 
     if (k != k2) {
       throw std::runtime_error("invalid shape");
     }
-    if (r1 != r2) {
-      throw std::runtime_error("batches size must match");
-    }
-
-    for (int i = 0; i < r1 - 2; i++) {
-      if ((this->_shape[i] != other._shape[i])) {
-        throw std::runtime_error("batches size must match");
-      }
-    }
-
-    std::vector<int> reshape;
-    for (int i = 0; i < r1 - 2; i++) {
-      reshape.push_back(other._shape[i]);
-    }
+    std::vector<int> aBatchShape(_shape.begin(), _shape.end() - 2);
+    std::vector<int> bBatchShape(other._shape.begin(), other._shape.end() - 2);
+    std::vector<int> batchShape = broadcastShape(aBatchShape, bBatchShape);
+    std::vector<int> reshape = batchShape;
     reshape.push_back(m);
     reshape.push_back(n);
 
     Tensor<T> res(reshape);
     int batchSize = 1;
-    for (int i = 0; i < r1 - 2; i++) {
-      batchSize *= other._shape[i];
+    for (auto d : batchShape) {
+      batchSize *= d;
     }
 
     for (int batch = 0; batch < batchSize; batch++) {
-      std::vector<int> batchIndices(r1 - 2);
+      std::vector<int> batchIndices(batchShape.size());
       int temp = batch;
-      for (int i = (r1 - 2) - 1; i >= 0; i--) {
-        batchIndices[i] = temp % _shape[i];
+      for (int i = (batchShape.size()) - 1; i >= 0; i--) {
+        batchIndices[i] = temp % batchShape[i];
         temp /= _shape[i];
       }
 
+      std::vector<int> aBatchIndex = broadcastIndex(batchIndices, aBatchShape);
+      std::vector<int> bBatchIndex = broadcastIndex(batchIndices, bBatchShape);
       for (int i = 0; i < m; i++) {
         for (int j = 0; j < n; j++) {
           T sum = 0;
           for (int x = 0; x < k; x++) {
-            std::vector<int> aIndex = batchIndices;
+            std::vector<int> aIndex = aBatchIndex;
             aIndex.push_back(i);
             aIndex.push_back(x);
 
-            std::vector<int> bIndex = batchIndices;
+            std::vector<int> bIndex = bBatchIndex;
             bIndex.push_back(x);
             bIndex.push_back(j);
 
@@ -217,6 +213,15 @@ public:
 
   // element wise operation
   // unary
+  Tensor<T> operator-() const {
+    Tensor<T> res(_shape);
+
+    for (int i = 0; i < size(); i++) {
+      res[i] = -data[i];
+    }
+
+    return res;
+  }
   Tensor<T> exp() const {
     Tensor<T> res(_shape);
 
@@ -508,35 +513,51 @@ public:
     Tensor<T> sumExp = expVal.sum(axis, true);
     return expVal / sumExp;
   }
+
+  // random generator
+  void random(T min, T max) {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<T> dist(min, max);
+
+    for (int i = 0; i < size(); i++) {
+      data[i] = dist(gen);
+    }
+  }
 };
 
-template <typename T> Tensor<T> operator/(T scalar, const Tensor<T> &tensor) {
+template <typename S, typename T>
+Tensor<T> operator/(S scalar, const Tensor<T> &tensor) {
   Tensor<T> res(tensor.shape());
   for (int i = 0; i < tensor.size(); i++) {
-    res[i] = scalar / tensor[i];
+    res[i] = static_cast<T>(scalar) / tensor[i];
   }
   return res;
 }
 
-template <typename T> Tensor<T> operator*(T scalar, const Tensor<T> &tensor) {
+template <typename S, typename T>
+Tensor<T> operator*(S scalar, const Tensor<T> &tensor) {
   Tensor<T> res(tensor.shape());
   for (int i = 0; i < tensor.size(); i++) {
-    res[i] = scalar * tensor[i];
+    res[i] = static_cast<T>(scalar) * tensor[i];
   }
   return res;
 }
 
-template <typename T> Tensor<T> operator+(T scalar, const Tensor<T> &tensor) {
+template <typename S, typename T>
+Tensor<T> operator+(S scalar, const Tensor<T> &tensor) {
   Tensor<T> res(tensor.shape());
   for (int i = 0; i < tensor.size(); i++) {
-    res[i] = scalar + tensor[i];
+    res[i] = static_cast<T>(scalar) + tensor[i];
   }
   return res;
 }
-template <typename T> Tensor<T> operator-(T scalar, const Tensor<T> &tensor) {
+
+template <typename S, typename T>
+Tensor<T> operator-(S scalar, const Tensor<T> &tensor) {
   Tensor<T> res(tensor.shape());
   for (int i = 0; i < tensor.size(); i++) {
-    res[i] = scalar - tensor[i];
+    res[i] = static_cast<T>(scalar) - tensor[i];
   }
   return res;
 }
