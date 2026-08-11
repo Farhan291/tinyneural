@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <fstream>
 #include <limits>
 #include <random>
 #include <stdexcept>
@@ -178,6 +179,32 @@ public:
     }
     return res;
   }
+  // fast path for rank-2 x rank-2, no broadcasting/index vectors at all
+  Tensor<T> matmul2D(const Tensor<T> &other) const {
+    int m = _shape[0], k = _shape[1];
+    int k2 = other._shape[0], n = other._shape[1];
+    if (k != k2)
+      throw std::runtime_error("invalid shape");
+
+    Tensor<T> res({m, n});
+    const T *a = &data[0];
+    const T *b = &other[0];
+    T *c = &res[0];
+
+    for (int i = 0; i < m; i++) {
+      for (int x = 0; x < k; x++) {
+        T aVal = a[i * k + x];
+        if (aVal == T(0))
+          continue; // optional, helps only if sparse
+        const T *bRow = b + x * n;
+        T *cRow = c + i * n;
+        for (int j = 0; j < n; j++) {
+          cRow[j] += aVal * bRow[j];
+        }
+      }
+    }
+    return res;
+  }
   // broadcast
   std::vector<int> broadcastShape(const std::vector<int> &ashape,
                                   const std::vector<int> &bshape) const {
@@ -229,6 +256,14 @@ public:
       res[i] = std::exp(data[i]);
     }
 
+    return res;
+  }
+  Tensor<T> log() const {
+    Tensor<T> res(_shape);
+    for (int i = 0; i < size(); i++) {
+      T v = data[i] < T(1e-12) ? T(1e-12) : data[i];
+      res[i] = std::log(v);
+    }
     return res;
   }
   // binary
@@ -523,6 +558,24 @@ public:
     for (int i = 0; i < size(); i++) {
       data[i] = dist(gen);
     }
+  }
+  void save(std::ofstream &out) const {
+    int rank = _shape.size();
+    out.write(reinterpret_cast<const char *>(&rank), sizeof(int));
+    out.write(reinterpret_cast<const char *>(_shape.data()),
+              rank * sizeof(int));
+    out.write(reinterpret_cast<const char *>(data.data()),
+              data.size() * sizeof(T));
+  }
+
+  void load(std::ifstream &in) {
+    int rank;
+    in.read(reinterpret_cast<char *>(&rank), sizeof(int));
+    std::vector<int> shape(rank);
+    in.read(reinterpret_cast<char *>(shape.data()), rank * sizeof(int));
+
+    *this = Tensor<T>(shape); // reallocates data + recomputes strides
+    in.read(reinterpret_cast<char *>(data.data()), data.size() * sizeof(T));
   }
 };
 
