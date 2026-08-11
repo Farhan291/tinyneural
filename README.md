@@ -24,9 +24,17 @@ Requires a C++17 compiler.
 make all
 ```
 
+Build in debug mode (much slower, not recommended for training):
+
+```bash
+g++ -std=c++17 -O0 -I src src/main.cpp -o app
+```
+
 ## Run
 
 ```bash
+make run
+# or
 ./app
 ```
 
@@ -42,7 +50,7 @@ hello world make for my tor.
 Type `quit` to exit.
 
 **Note:** training takes ~20 minutes at `-O2` (100k steps). To retrain from
-scratch, delete `model.bin` first it is loaded automatically if present.
+scratch, delete `model.bin` first — it is loaded automatically if present.
 
 ## Training configuration
 
